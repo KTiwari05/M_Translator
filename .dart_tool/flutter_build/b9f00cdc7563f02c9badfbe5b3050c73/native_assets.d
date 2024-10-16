@@ -1,0 +1,1 @@
+ C:\\Users\\Kartikey.Tiwari\\Downloads\\voicetotext-2\\.dart_tool\\flutter_build\\b9f00cdc7563f02c9badfbe5b3050c73\\native_assets.yaml: 
