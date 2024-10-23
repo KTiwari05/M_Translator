@@ -11,7 +11,7 @@ class UserRegistrationPage extends StatefulWidget {
 class _UserRegistrationPageState extends State<UserRegistrationPage> {
   final TextEditingController _nameController = TextEditingController();
   String _selectedLanguage = 'English';
-  final List<String> languages = ['English', 'French', 'Hindi'];
+  final List<String> languages = ['English', 'French', 'Hindi', 'German'];
 
   @override
   Widget build(BuildContext context) {

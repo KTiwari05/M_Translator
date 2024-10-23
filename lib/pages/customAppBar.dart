@@ -44,7 +44,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                 Icon(Icons.chat_bubble, color: Colors.white),
                 SizedBox(width: 5),
                 Text(
-                  'Conversation',
+                  'Chat Room',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,

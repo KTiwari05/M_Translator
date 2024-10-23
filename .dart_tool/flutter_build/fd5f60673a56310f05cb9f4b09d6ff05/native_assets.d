@@ -1,0 +1,1 @@
+ C:\\Users\\Kartikey.Tiwari\\Downloads\\M_Translator\\.dart_tool\\flutter_build\\fd5f60673a56310f05cb9f4b09d6ff05\\native_assets.yaml: 

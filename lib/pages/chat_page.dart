@@ -38,6 +38,12 @@ class _ChatPageState extends State<ChatPage> {
   final _vosk = VoskFlutterPlugin.instance();
   final _modelLoader = ModelLoader();
 
+  // State variable to track multiple users currently speaking
+  Set<String> currentlySpeakingUsers = {};
+
+  // State variable to track the active speaker
+  String? activeSpeaker;
+
   @override
   void initState() {
     super.initState();
@@ -77,6 +83,27 @@ class _ChatPageState extends State<ChatPage> {
         messages.add({'sender': 'System', 'message': data['message']});
       });
       _scrollToBottom();
+    });
+
+    // Updated to track multiple users speaking at the same time
+    widget.socket.on('user-speaking-start', (data) {
+      setState(() {
+        currentlySpeakingUsers.add(data['sender']);
+        if (currentlySpeakingUsers.length == 1) {
+          activeSpeaker = data['sender']; // Set active speaker if only one
+        }
+      });
+    });
+
+    widget.socket.on('user-speaking-stop', (data) {
+      setState(() {
+        currentlySpeakingUsers.remove(data['sender']);
+        if (currentlySpeakingUsers.isEmpty) {
+          activeSpeaker = null; // Reset active speaker when no one is speaking
+        } else {
+          activeSpeaker = currentlySpeakingUsers.first; // Update active speaker
+        }
+      });
     });
   }
 
@@ -137,6 +164,9 @@ class _ChatPageState extends State<ChatPage> {
       case 'Hindi':
         modelPath = 'assets/models/vosk-model-small-hi-0.22.zip';
         break;
+      case 'German':
+        modelPath = 'assets/models/vosk-model-small-de-0.15.zip';
+        break;
       default:
         modelPath = 'assets/models/vosk-model-small-en-in-0.4.zip';
         break;
@@ -151,6 +181,8 @@ class _ChatPageState extends State<ChatPage> {
       await _tts.setLanguage('fr-FR');
     } else if (language == 'Hindi') {
       await _tts.setLanguage('hi-IN');
+    } else if (language == 'German') {
+      await _tts.setLanguage('de-DE');
     } else {
       await _tts.setLanguage('en-US');
     }
@@ -209,12 +241,6 @@ class _ChatPageState extends State<ChatPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Chat Room: ${widget.roomId}'),
-        // actions: [
-        //   IconButton(
-        //     icon: const Icon(Icons.exit_to_app),
-        //     onPressed: _showLeaveConfirmationDialog,
-        //   ),
-        // ],
         backgroundColor: Colors.redAccent,
         elevation: 5.0,
       ),
@@ -274,6 +300,29 @@ class _ChatPageState extends State<ChatPage> {
               },
             ),
           ),
+
+          // Show the animation when one or more users are speaking
+          // Show the animation when one or more users are speaking
+          if (currentlySpeakingUsers.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  LoadingAnimationWidget.bouncingBall(
+                    color: Colors.redAccent,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  if (currentlySpeakingUsers.length <= 3)
+                    Text('${currentlySpeakingUsers.join(', ')} is speaking')
+                  else
+                    const Text('Multiple users are speaking'),
+                ],
+              ),
+            ),
+          ],
+
           Padding(
             padding: const EdgeInsets.all(12.0),
             child: Row(
@@ -281,50 +330,67 @@ class _ChatPageState extends State<ChatPage> {
               children: [
                 Expanded(
                   child: GestureDetector(
-                    onTap: () async {
-                      if (!_isRecording) {
-                        await _startRecognition();
-                        setState(() {
-                          _isRecording = true;
-                          isWaiting = true;
-                          isAnimatingDots = false;
-                        });
+                    onTap:
+                        (activeSpeaker == null || activeSpeaker == widget.name)
+                            ? () async {
+                                if (!_isRecording) {
+                                  // Emit 'user-speaking-start' when the user starts recording
+                                  widget.socket.emit('user-speaking-start',
+                                      {'sender': widget.name});
 
-                        await Future.delayed(
-                            const Duration(milliseconds: 1000));
-                        await Future.delayed(const Duration(milliseconds: 450));
+                                  await _startRecognition();
+                                  setState(() {
+                                    _isRecording = true;
+                                    isWaiting = true;
+                                    isAnimatingDots = false;
+                                  });
 
-                        setState(() {
-                          isWaiting = false;
-                          isAnimatingDots = true;
-                        });
-                      } else {
-                        await _stopRecognition();
-                        setState(() {
-                          _isRecording = false;
-                          isWaiting = false;
-                          isAnimatingDots = false;
-                        });
-                      }
-                    },
+                                  await Future.delayed(
+                                      const Duration(milliseconds: 1000));
+                                  await Future.delayed(
+                                      const Duration(milliseconds: 450));
+
+                                  setState(() {
+                                    isWaiting = false;
+                                    isAnimatingDots = true;
+                                  });
+                                } else {
+                                  // Emit 'user-speaking-stop' when the user stops recording
+                                  widget.socket.emit('user-speaking-stop',
+                                      {'sender': widget.name});
+
+                                  await _stopRecognition();
+                                  setState(() {
+                                    _isRecording = false;
+                                    isWaiting = false;
+                                    isAnimatingDots = false;
+                                  });
+                                }
+                              }
+                            : null, // Disable tap if another user is speaking
                     child: CircleAvatar(
                       radius: 30,
-                      backgroundColor:
-                          _isRecording ? Colors.redAccent : Colors.redAccent,
+                      backgroundColor: (activeSpeaker == null ||
+                              activeSpeaker == widget.name)
+                          ? (_isRecording ? Colors.redAccent : Colors.redAccent)
+                          : Colors.grey, // Set gray when mic is disabled
                       child: _isRecording
                           ? (isWaiting
                               ? LoadingAnimationWidget.inkDrop(
                                   color: Colors.white, size: 35)
                               : LoadingAnimationWidget.staggeredDotsWave(
                                   color: Colors.white, size: 35))
-                          : const Icon(Icons.mic,
-                              color: Colors.white, size: 35),
+                          : Icon(
+                              Icons.mic,
+                              color: Colors.white,
+                              size: 35,
+                            ),
                     ),
                   ),
                 ),
               ],
             ),
-          ),
+          )
         ],
       ),
     );

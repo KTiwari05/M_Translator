@@ -48,7 +48,7 @@ class _TranslatorScreenState extends State<TranslatorScreen> {
   String selectedSourceLanguage = 'English';
   String selectedTargetLanguage = 'French';
 
-  List<String> languages = ['English', 'French', 'Hindi'];
+  List<String> languages = ['English', 'French', 'Hindi', 'German'];
   List<Transcription> transcriptions = [];
   final ScrollController _scrollController = ScrollController();
 
@@ -263,6 +263,12 @@ class _TranslatorScreenState extends State<TranslatorScreen> {
             targetLanguage: getTargetLanguageEnum(),
           );
           break;
+        case 'German':
+          translator = OnDeviceTranslator(
+            sourceLanguage: TranslateLanguage.german,
+            targetLanguage: getTargetLanguageEnum(),
+          );
+          break;
         default:
           translator = OnDeviceTranslator(
             sourceLanguage: TranslateLanguage.english,
@@ -288,6 +294,8 @@ class _TranslatorScreenState extends State<TranslatorScreen> {
         return TranslateLanguage.french;
       case 'Hindi':
         return TranslateLanguage.hindi;
+      case 'German':
+        return TranslateLanguage.german;
       default:
         return TranslateLanguage.english;
     }
@@ -301,6 +309,8 @@ class _TranslatorScreenState extends State<TranslatorScreen> {
         return TranslateLanguage.french;
       case 'Hindi':
         return TranslateLanguage.hindi;
+      case 'German':
+        return TranslateLanguage.german;
       default:
         return TranslateLanguage.english;
     }
@@ -311,6 +321,8 @@ class _TranslatorScreenState extends State<TranslatorScreen> {
       await _tts.setLanguage('fr-FR');
     } else if (language == 'Hindi') {
       await _tts.setLanguage('hi-IN');
+    } else if (language == 'German') {
+      await _tts.setLanguage('de-DE');
     } else {
       await _tts.setLanguage('en-US');
     }
@@ -327,6 +339,8 @@ class _TranslatorScreenState extends State<TranslatorScreen> {
       modelPath = 'assets/models/vosk-model-small-fr-0.22.zip';
     } else if (language == 'Hindi') {
       modelPath = 'assets/models/vosk-model-small-hi-0.22.zip';
+    } else if (language == 'German') {
+      modelPath = 'assets/models/vosk-model-small-de-0.15.zip';
     } else {
       modelPath = 'assets/models/vosk-model-small-en-in-0.4.zip';
     }
