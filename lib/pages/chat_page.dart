@@ -11,6 +11,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:intl/intl.dart';
 
 class ChatPage extends StatefulWidget {
   final String roomId;
@@ -68,7 +69,7 @@ class _ChatPageState extends State<ChatPage> {
     widget.socket.on('receive-message', (data) async {
       String senderLanguage = data['senderLanguage'];
       String translatedMessage = data['message'];
-
+      String timestamp = DateTime.now().toString();
       // Translate if sender's language is different from receiver's
       if (senderLanguage != widget.language) {
         translatedMessage = await _translatorService.translateText(
@@ -80,7 +81,8 @@ class _ChatPageState extends State<ChatPage> {
           'sender': data['sender'],
           'message': translatedMessage,
           'senderLanguage': senderLanguage,
-          'id': data['id']
+          'id': data['id'],
+          'timestamp': timestamp,
         });
       });
 
@@ -93,8 +95,13 @@ class _ChatPageState extends State<ChatPage> {
     });
 
     widget.socket.on('message', (data) {
+      String timestamp = DateTime.now().toString();
       setState(() {
-        messages.add({'sender': 'System', 'message': data['message']});
+        messages.add({
+          'sender': 'System',
+          'message': data['message'],
+          'timestamp': timestamp
+        });
       });
       _scrollToBottom();
     });
@@ -123,7 +130,7 @@ class _ChatPageState extends State<ChatPage> {
     widget.socket.on('message-edited', (data) async {
       String updatedMessage = data['newMessage'];
       String senderLanguage = data['senderLanguage'];
-
+      String timestamp = DateTime.now().toString();
       // Check if sender's language is different from receiver's
       if (senderLanguage != widget.language) {
         // Translate the message to the receiver's language
@@ -137,6 +144,7 @@ class _ChatPageState extends State<ChatPage> {
         messages = messages.map((msg) {
           if (msg['id'] == data['messageId']) {
             msg['message'] = updatedMessage; // Update the translated message
+            msg['timestamp'] = timestamp; // Update the timestamp as well
           }
           return msg;
         }).toList();
@@ -152,9 +160,18 @@ class _ChatPageState extends State<ChatPage> {
         final updatedMessage = data.message;
         final index =
             messages.indexWhere((msg) => msg['id'] == updatedMessage.id);
+
         if (index != -1) {
-          messages[index] =
-              updatedMessage; // Update the local message with the new content
+          // Update the local message with the new content
+          messages[index] = {
+            ...messages[index], // Retain existing properties
+            'message': updatedMessage['message'], // Update the message content
+            // If you want to keep the timestamp or any other properties
+            'timestamp': updatedMessage.containsKey('timestamp')
+                ? updatedMessage['timestamp']
+                : messages[index]
+                    ['timestamp'], // Keep the old timestamp if not provided
+          };
         }
       });
     });
@@ -500,6 +517,12 @@ class _ChatPageState extends State<ChatPage> {
                     final message = messages[index];
                     final isSender = message['sender'] == widget.name;
 
+                    // Format the timestamp (assuming it's stored as DateTime or String)
+                    final DateTime timestamp = DateTime.parse(message[
+                        'timestamp']!); // Ensure 'timestamp' is present in the message
+                    final String formattedTime = DateFormat('hh:mm a')
+                        .format(timestamp); // Example format: 03:45 PM
+
                     return Align(
                       alignment: isSender
                           ? Alignment.centerRight
@@ -526,6 +549,7 @@ class _ChatPageState extends State<ChatPage> {
                               ? CrossAxisAlignment.end
                               : CrossAxisAlignment.start,
                           children: [
+                            // Sender name
                             Text(
                               message['sender']!,
                               style: TextStyle(
@@ -536,6 +560,8 @@ class _ChatPageState extends State<ChatPage> {
                               ),
                             ),
                             const SizedBox(height: 1),
+
+                            // Message content
                             Text(
                               message['message']!,
                               style: TextStyle(
@@ -544,24 +570,51 @@ class _ChatPageState extends State<ChatPage> {
                                     isSender ? Colors.black87 : Colors.black54,
                               ),
                             ),
-                            // Add the edit icon
-                            if (isSender) // Show the edit icon only for sender messages
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.edit,
-                                  color: Colors
-                                      .red, // Change to your desired color
-                                  size:
-                                      15, // Adjust the size to make it smaller
+
+                            const SizedBox(
+                                height:
+                                    5), // Space between message and timestamp
+
+                            // Timestamp
+                            Text(
+                              formattedTime,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors
+                                    .grey, // Set a lighter color for the timestamp
+                              ),
+                            ),
+
+                            // Edit icon for the sender's messages
+                            if (isSender)
+                              Container(
+                                padding: EdgeInsets
+                                    .zero, // Ensure no padding around the container
+                                margin: EdgeInsets
+                                    .zero, // Ensure no margin around the container
+                                child: Row(
+                                  mainAxisSize: MainAxisSize
+                                      .min, // Minimize space taken by the row
+                                  children: [
+                                    IconButton(
+                                      style: IconButton.styleFrom(
+                                        padding: EdgeInsets
+                                            .zero, // Remove padding around the button
+                                        tapTargetSize: MaterialTapTargetSize
+                                            .shrinkWrap, // Minimize tap area
+                                      ),
+                                      icon: const Icon(
+                                        Icons.edit,
+                                        color: Colors.red,
+                                        size: 20, // Size of the icon
+                                      ),
+                                      onPressed: () {
+                                        _showEditDialog(message['id'] ?? '',
+                                            message['message'] ?? '');
+                                      },
+                                    ),
+                                  ],
                                 ),
-                                // padding: const EdgeInsets.symmetric(
-                                //     vertical: -10,
-                                //     horizontal:
-                                //         -10), // Decrease the padding as needed
-                                onPressed: () {
-                                  _showEditDialog(message['id'] ?? '',
-                                      message['message'] ?? '');
-                                },
                               ),
                           ],
                         ),

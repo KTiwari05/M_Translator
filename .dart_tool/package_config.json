@@ -194,6 +194,12 @@
       "languageVersion": "2.15"
     },
     {
+      "name": "intl",
+      "rootUri": "file:///C:/Users/Kartikey.Tiwari/AppData/Local/Pub/Cache/hosted/pub.dev/intl-0.19.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.0"
+    },
+    {
       "name": "json_annotation",
       "rootUri": "file:///C:/Users/Kartikey.Tiwari/AppData/Local/Pub/Cache/hosted/pub.dev/json_annotation-4.9.0",
       "packageUri": "lib/",
@@ -584,7 +590,7 @@
       "languageVersion": "3.3"
     }
   ],
-  "generated": "2024-10-23T12:44:45.102124Z",
+  "generated": "2024-10-25T11:29:36.650811Z",
   "generator": "pub",
   "generatorVersion": "3.5.3",
   "flutterRoot": "file:///C:/Users/Kartikey.Tiwari/Downloads/Flutter/flutter_windows_3.24.3-stable/flutter",
