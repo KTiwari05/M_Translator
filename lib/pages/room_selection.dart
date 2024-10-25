@@ -20,12 +20,11 @@ class _RoomSelectionPageState extends State<RoomSelectionPage> {
   void initState() {
     super.initState();
     // Initialize Socket.IO
-    socket = IO.io(
-        'https://ea876208-0800-472a-bcde-95b1a688d692-00-5mpn4kdzmlp0.pike.repl.co/',
-        <String, dynamic>{
-          'transports': ['websocket'],
-          'autoConnect': false,
-        });
+    socket =
+        IO.io('https://m-server-translator.onrender.com', <String, dynamic>{
+      'transports': ['websocket'],
+      'autoConnect': false,
+    });
     socket.connect();
 
     // Listen for socket connection

@@ -1,10 +1,16 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:vosk_flutter/vosk_flutter.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'translator_service.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
+import 'package:path/path.dart' as path;
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:open_file/open_file.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class ChatPage extends StatefulWidget {
   final String roomId;
@@ -32,6 +38,7 @@ class _ChatPageState extends State<ChatPage> {
   bool _isRecording = false;
   bool isWaiting = false;
   bool isAnimatingDots = false;
+  bool isAnimatingDownload = false;
   String accumulatedText = '';
   Recognizer? _recognizer;
   SpeechService? _speechService;
@@ -41,12 +48,18 @@ class _ChatPageState extends State<ChatPage> {
   // State variable to track multiple users currently speaking
   Set<String> currentlySpeakingUsers = {};
 
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+
   // State variable to track the active speaker
   String? activeSpeaker;
+  String? editingMessageId;
+  String editingMessageContent = '';
 
   @override
   void initState() {
     super.initState();
+    _initializeNotifications();
 
     widget.socket.onConnect((_) {
       print("Connected to the server");
@@ -66,7 +79,8 @@ class _ChatPageState extends State<ChatPage> {
         messages.add({
           'sender': data['sender'],
           'message': translatedMessage,
-          'senderLanguage': senderLanguage
+          'senderLanguage': senderLanguage,
+          'id': data['id']
         });
       });
 
@@ -102,6 +116,45 @@ class _ChatPageState extends State<ChatPage> {
           activeSpeaker = null; // Reset active speaker when no one is speaking
         } else {
           activeSpeaker = currentlySpeakingUsers.first; // Update active speaker
+        }
+      });
+    });
+
+    widget.socket.on('message-edited', (data) async {
+      String updatedMessage = data['newMessage'];
+      String senderLanguage = data['senderLanguage'];
+
+      // Check if sender's language is different from receiver's
+      if (senderLanguage != widget.language) {
+        // Translate the message to the receiver's language
+        updatedMessage = await _translatorService.translateText(
+            updatedMessage, senderLanguage, widget.language);
+        _speak(updatedMessage, widget.language);
+      }
+
+      // Update the message in the chat box
+      setState(() {
+        messages = messages.map((msg) {
+          if (msg['id'] == data['messageId']) {
+            msg['message'] = updatedMessage; // Update the translated message
+          }
+          return msg;
+        }).toList();
+      });
+
+      // if (data['sender'] != widget.name) {
+      //   _speak(updatedMessage, widget.language);
+      // }
+    });
+
+    widget.socket.on('message-updated', (data) {
+      setState(() {
+        final updatedMessage = data.message;
+        final index =
+            messages.indexWhere((msg) => msg['id'] == updatedMessage.id);
+        if (index != -1) {
+          messages[index] =
+              updatedMessage; // Update the local message with the new content
         }
       });
     });
@@ -141,6 +194,7 @@ class _ChatPageState extends State<ChatPage> {
           'roomId': widget.roomId,
           'message': accumulatedText.trim(),
           'language': widget.language,
+          'messageId': UniqueKey().toString(),
         });
         accumulatedText = '';
       }
@@ -164,9 +218,9 @@ class _ChatPageState extends State<ChatPage> {
       case 'Hindi':
         modelPath = 'assets/models/vosk-model-small-hi-0.22.zip';
         break;
-      case 'German':
-        modelPath = 'assets/models/vosk-model-small-de-0.15.zip';
-        break;
+      // case 'German':
+      //   modelPath = 'assets/models/vosk-model-small-de-0.15.zip';
+      //   break;
       default:
         modelPath = 'assets/models/vosk-model-small-en-in-0.4.zip';
         break;
@@ -201,34 +255,181 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  // New method to download transcriptions
+  Future<void> _initializeBasicNotifications() async {
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+
+    final InitializationSettings initializationSettings =
+        const InitializationSettings(android: initializationSettingsAndroid);
+
+    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+  }
+
+  Future<void> _initializeNotifications() async {
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+
+    final InitializationSettings initializationSettings =
+        const InitializationSettings(android: initializationSettingsAndroid);
+
+    await flutterLocalNotificationsPlugin.initialize(initializationSettings,
+        onDidReceiveNotificationResponse:
+            (NotificationResponse response) async {
+      final String? payload = response.payload;
+      if (payload != null) {
+        await OpenFile.open(payload); // Open the downloaded file
+      }
+    });
+  }
+
+  Future<void> _downloadTranscriptions() async {
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+      'download_channel',
+      'Downloads',
+      channelDescription: 'Notifications for download progress',
+      importance: Importance.max,
+      priority: Priority.high,
+      showWhen: false,
+      icon:
+          'mothersonlogo', // Replace with your actual icon name (without extension)
+    );
+
+    const NotificationDetails platformChannelSpecifics =
+        NotificationDetails(android: androidPlatformChannelSpecifics);
+
+    // Show notification for download start
+    await flutterLocalNotificationsPlugin.show(
+      0,
+      'Downloading Transcription',
+      'Download in progress...',
+      platformChannelSpecifics,
+    );
+
+    try {
+      // Check for storage permissions
+      if (await Permission.storage.request().isGranted) {
+        // Get the external storage directory
+        final directory = await getExternalStorageDirectory();
+
+        // Check if the directory is not null
+        if (directory != null) {
+          // Define the downloads directory
+          final downloadsDirectory = Directory('${directory.path}/Download');
+
+          // Ensure the downloads directory exists
+          if (!await downloadsDirectory.exists()) {
+            await downloadsDirectory.create(recursive: true);
+          }
+
+          // Specify the file path in the downloads directory
+          final filePath =
+              path.join(downloadsDirectory.path, 'transcription.txt');
+          final file = File(filePath);
+
+          // Combine all transcription texts into a formatted string
+          final String content = messages.map((t) {
+            return '${t['sender']}: ${t['message']}'; // Include sender's name
+          }).join('\n');
+
+          // Write the transcription to a file
+          await file.writeAsString(content);
+
+          // Show complete notification
+          await flutterLocalNotificationsPlugin.show(
+            0,
+            'Download Complete',
+            'Transcription saved at $filePath',
+            platformChannelSpecifics,
+            payload: filePath, // Pass the file path in the payload
+          );
+        } else {
+          // Handle case where directory is null
+          await flutterLocalNotificationsPlugin.show(
+            0,
+            'Download Failed',
+            'Could not get download directory.',
+            platformChannelSpecifics,
+          );
+        }
+      } else {
+        // Handle permission denial
+        await flutterLocalNotificationsPlugin.show(
+          0,
+          'Permission Denied',
+          'Storage permission is required to save transcription.',
+          platformChannelSpecifics,
+        );
+      }
+    } catch (e) {
+      print("Error occurred: $e"); // Log the error for debugging
+      await flutterLocalNotificationsPlugin.show(
+        0,
+        'Download Failed',
+        'Failed to save transcription: $e',
+        platformChannelSpecifics,
+      );
+    }
+  }
+
   @override
   void dispose() {
     _scrollController.dispose();
     super.dispose();
   }
 
-  Future<void> _showLeaveConfirmationDialog() async {
-    return showDialog<void>(
+  void _editMessage(String messageId, String updatedMessage) {
+    // Emit the edited message to the server
+    widget.socket.emit('edit-message', {
+      'roomId': widget.roomId,
+      'messageId': messageId,
+      'updatedMessage': updatedMessage,
+    });
+
+    // Update the message locally
+    setState(() {
+      final index = messages.indexWhere((msg) => msg['id'] == messageId);
+      if (index != -1) {
+        messages[index]['message'] =
+            updatedMessage; // Update the existing message
+      }
+    });
+  }
+
+  void _showEditDialog(String messageId, String currentMessage) {
+    TextEditingController _editController = TextEditingController();
+    _editController.text = currentMessage;
+
+    showDialog(
       context: context,
-      barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Leave Room'),
-          content: const Text('Are you sure you want to leave the room?'),
+          title: const Text("Edit Message"),
+          content: TextFormField(
+            controller: _editController,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              labelText: "Edit your message",
+              border: OutlineInputBorder(),
+            ),
+          ),
           actions: <Widget>[
             TextButton(
-              child: const Text('Cancel'),
               onPressed: () {
-                Navigator.of(context).pop();
+                Navigator.of(context).pop(); // Close the dialog
               },
+              child: const Text("Cancel"),
             ),
-            TextButton(
-              child: const Text('Leave'),
+            ElevatedButton(
               onPressed: () {
-                widget.socket.disconnect();
-                Navigator.of(context).pop();
-                Navigator.of(context).pop();
+                final updatedMessage = _editController.text.trim();
+                if (updatedMessage.isNotEmpty) {
+                  _editMessage(messageId, updatedMessage);
+                  Navigator.of(context).pop(); // Close the dialog
+                }
               },
+              child: const Text("Send"),
             ),
           ],
         );
@@ -243,95 +444,163 @@ class _ChatPageState extends State<ChatPage> {
         title: Text('Chat Room: ${widget.roomId}'),
         backgroundColor: Colors.redAccent,
         elevation: 5.0,
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              itemCount: messages.length,
-              itemBuilder: (context, index) {
-                final message = messages[index];
-                final isSender = message['sender'] == widget.name;
-
-                return Align(
-                  alignment:
-                      isSender ? Alignment.centerRight : Alignment.centerLeft,
-                  child: Container(
-                    margin:
-                        const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: isSender ? Colors.blue[100] : Colors.grey[100],
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          spreadRadius: 2,
-                          blurRadius: 5,
-                          offset: const Offset(0, 3), // Shadow position
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: isSender
-                          ? CrossAxisAlignment.end
-                          : CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          message['sender']!,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: isSender ? Colors.blue[900] : Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          message['message']!,
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: isSender ? Colors.black87 : Colors.black54,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // Show the animation when one or more users are speaking
-          // Show the animation when one or more users are speaking
-          if (currentlySpeakingUsers.isNotEmpty) ...[
+        actions: [
+          if (messages.isNotEmpty) // Check if messages are available
             Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  LoadingAnimationWidget.bouncingBall(
-                    color: Colors.redAccent,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 10),
-                  if (currentlySpeakingUsers.length <= 3)
-                    Text('${currentlySpeakingUsers.join(', ')} is speaking')
-                  else
-                    const Text('Multiple users are speaking'),
-                ],
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 8.0), // Add some padding
+              child: ElevatedButton(
+                onPressed: () async {
+                  setState(() {
+                    isAnimatingDownload = true; // Start the animation
+                  });
+
+                  // Wait for 2 seconds before starting the download
+                  await Future.delayed(const Duration(seconds: 2));
+
+                  setState(() {
+                    isAnimatingDownload = false; // Stop the animation
+                  });
+
+                  _downloadTranscriptions(); // Call your download function
+                },
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.all(2.0),
+                  backgroundColor: Colors.white, // Color for the button
+                  shape: const CircleBorder(),
+                  side: const BorderSide(
+                    color: Colors
+                        .redAccent, // Change this to your desired border color
+                    width:
+                        6.0, // Set the border width (reduce this value for a thinner border)
+                  ), // Circular button shape
+                ),
+                child: isAnimatingDownload
+                    ? LoadingAnimationWidget.hexagonDots(
+                        color: Colors.redAccent,
+                        size: 25) // Animation during download
+                    : const Icon(
+                        Icons.file_download,
+                        size: 20, // Same size as previous
+                        color: Colors.redAccent, // White icon for contrast
+                      ),
               ),
             ),
-          ],
+        ],
+      ),
+      body: Stack(
+        children: [
+          Column(
+            children: [
+              Expanded(
+                child: ListView.builder(
+                  controller: _scrollController,
+                  itemCount: messages.length,
+                  itemBuilder: (context, index) {
+                    final message = messages[index];
+                    final isSender = message['sender'] == widget.name;
 
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap:
-                        (activeSpeaker == null || activeSpeaker == widget.name)
+                    return Align(
+                      alignment: isSender
+                          ? Alignment.centerRight
+                          : Alignment.centerLeft,
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(
+                            vertical: 5, horizontal: 10),
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 1, horizontal: 10),
+                        decoration: BoxDecoration(
+                          color: isSender ? Colors.blue[100] : Colors.grey[100],
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              spreadRadius: 4,
+                              blurRadius: 5,
+                              offset: const Offset(0, 3), // Shadow position
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: isSender
+                              ? CrossAxisAlignment.end
+                              : CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              message['sender']!,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: isSender
+                                    ? Colors.blue[900]
+                                    : Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(height: 1),
+                            Text(
+                              message['message']!,
+                              style: TextStyle(
+                                fontSize: 16,
+                                color:
+                                    isSender ? Colors.black87 : Colors.black54,
+                              ),
+                            ),
+                            // Add the edit icon
+                            if (isSender) // Show the edit icon only for sender messages
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.edit,
+                                  color: Colors
+                                      .red, // Change to your desired color
+                                  size:
+                                      15, // Adjust the size to make it smaller
+                                ),
+                                // padding: const EdgeInsets.symmetric(
+                                //     vertical: -10,
+                                //     horizontal:
+                                //         -10), // Decrease the padding as needed
+                                onPressed: () {
+                                  _showEditDialog(message['id'] ?? '',
+                                      message['message'] ?? '');
+                                },
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+              // Show the animation when one or more users are speaking
+              if (currentlySpeakingUsers.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      LoadingAnimationWidget.bouncingBall(
+                        color: Colors.redAccent,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 10),
+                      if (currentlySpeakingUsers.length <= 3)
+                        Text('${currentlySpeakingUsers.join(', ')} is speaking')
+                      else
+                        const Text('Multiple users are speaking'),
+                    ],
+                  ),
+                ),
+              ],
+
+              Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: (activeSpeaker == null ||
+                                activeSpeaker == widget.name)
                             ? () async {
                                 if (!_isRecording) {
                                   // Emit 'user-speaking-start' when the user starts recording
@@ -368,29 +637,35 @@ class _ChatPageState extends State<ChatPage> {
                                 }
                               }
                             : null, // Disable tap if another user is speaking
-                    child: CircleAvatar(
-                      radius: 30,
-                      backgroundColor: (activeSpeaker == null ||
-                              activeSpeaker == widget.name)
-                          ? (_isRecording ? Colors.redAccent : Colors.redAccent)
-                          : Colors.grey, // Set gray when mic is disabled
-                      child: _isRecording
-                          ? (isWaiting
-                              ? LoadingAnimationWidget.inkDrop(
-                                  color: Colors.white, size: 35)
-                              : LoadingAnimationWidget.staggeredDotsWave(
-                                  color: Colors.white, size: 35))
-                          : Icon(
-                              Icons.mic,
-                              color: Colors.white,
-                              size: 35,
-                            ),
+                        child: CircleAvatar(
+                          radius: 30,
+                          backgroundColor: (activeSpeaker == null ||
+                                  activeSpeaker == widget.name)
+                              ? (_isRecording
+                                  ? Colors.redAccent
+                                  : Colors.redAccent)
+                              : Colors.grey, // Set gray when mic is disabled
+                          child: _isRecording
+                              ? (isWaiting
+                                  ? LoadingAnimationWidget.inkDrop(
+                                      color: Colors.white, size: 35)
+                                  : LoadingAnimationWidget.staggeredDotsWave(
+                                      color: Colors.white, size: 35))
+                              : const Icon(
+                                  Icons.mic,
+                                  color: Colors.white,
+                                  size: 35,
+                                ),
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 15),
+                    // Additional buttons can be added here
+                  ],
                 ),
-              ],
-            ),
-          )
+              ),
+            ],
+          ),
         ],
       ),
     );

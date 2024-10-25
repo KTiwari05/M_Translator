@@ -33,12 +33,8 @@ class TranslatorService {
     switch (language.toLowerCase()) {
       case 'english':
         return TranslateLanguage.english;
-      case 'spanish':
-        return TranslateLanguage.spanish;
       case 'french':
         return TranslateLanguage.french;
-      case 'german':
-        return TranslateLanguage.german;
       case 'hindi':
         return TranslateLanguage.hindi;
       // Add more languages here as needed

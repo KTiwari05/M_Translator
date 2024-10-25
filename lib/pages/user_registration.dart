@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'room_selection.dart';
+import 'package:http/http.dart' as http;
 
 class UserRegistrationPage extends StatefulWidget {
   const UserRegistrationPage({super.key});
@@ -11,7 +12,47 @@ class UserRegistrationPage extends StatefulWidget {
 class _UserRegistrationPageState extends State<UserRegistrationPage> {
   final TextEditingController _nameController = TextEditingController();
   String _selectedLanguage = 'English';
-  final List<String> languages = ['English', 'French', 'Hindi', 'German'];
+  final List<String> languages = ['English', 'French', 'Hindi'];
+
+  // Expiration date
+  final DateTime expirationDate = DateTime(2024, 11, 01, 11, 59, 59);
+
+  Future<bool> hasInternetConnection() async {
+    try {
+      final response = await http
+          .get(Uri.parse('https://www.google.com'))
+          .timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        return true; // Internet is available
+      }
+    } catch (e) {
+      return false; // No internet connection
+    }
+    return false;
+  }
+
+  // Show the no-internet connection dialog
+  void showNoInternetDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('No Internet Connection'),
+          content:
+              const Text('Please check your network settings and try again.'),
+          actions: [
+            TextButton(
+              child: const Text('OK'),
+              onPressed: () {
+                Navigator.of(context).pop(); // Close dialog
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -99,22 +140,38 @@ class _UserRegistrationPageState extends State<UserRegistrationPage> {
                             padding: const EdgeInsets.symmetric(
                                 vertical: 14.0, horizontal: 50.0),
                           ),
-                          onPressed: () {
-                            if (_nameController.text.isEmpty) {
+                          onPressed: () async {
+                            // Check if the current date is before the expiration date
+                            if (DateTime.now().isAfter(expirationDate)) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                    content: Text('Please enter your name')),
-                              );
-                            } else {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => RoomSelectionPage(
-                                    name: _nameController.text,
-                                    language: _selectedLanguage,
-                                  ),
+                                  content: Text('Registration has expired.'),
                                 ),
                               );
+                            } else if (_nameController.text.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Please enter your name'),
+                                ),
+                              );
+                            } else {
+                              // Check for internet connection
+                              bool isConnected = await hasInternetConnection();
+                              if (isConnected) {
+                                // Navigate to the next page if internet is available
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => RoomSelectionPage(
+                                      name: _nameController.text,
+                                      language: _selectedLanguage,
+                                    ),
+                                  ),
+                                );
+                              } else {
+                                // Show no-internet dialog if not connected
+                                showNoInternetDialog();
+                              }
                             }
                           },
                           child: const Text(

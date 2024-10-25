@@ -1,10 +1,16 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:vosk_flutter/vosk_flutter.dart';
 import 'package:google_mlkit_translation/google_mlkit_translation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:path/path.dart' as path;
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:open_file/open_file.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:path_provider/path_provider.dart';
 
 void main() {
   runApp(const TranslatorApp());
@@ -44,11 +50,12 @@ class _TranslatorScreenState extends State<TranslatorScreen> {
       false; // To track staggered dots animation for right mic
   bool isWaitingLeft = false; // To track waiting state for left mic
   bool isWaitingRight = false; // To track waiting state for right mic
+  bool isAnimatingDownload = false; // To track download animation state
 
   String selectedSourceLanguage = 'English';
   String selectedTargetLanguage = 'French';
 
-  List<String> languages = ['English', 'French', 'Hindi', 'German'];
+  List<String> languages = ['English', 'French', 'Hindi'];
   List<Transcription> transcriptions = [];
   final ScrollController _scrollController = ScrollController();
 
@@ -61,15 +68,136 @@ class _TranslatorScreenState extends State<TranslatorScreen> {
   final FlutterTts _tts = FlutterTts();
   OnDeviceTranslator? translator;
 
+  // Notification plugin instance
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+
   // Expiration Logic
   final DateTime expirationDate =
-      DateTime(2124, 10, 9, 23, 59, 59); // Set to Oct 9, 2024, 11:59 pM
+      DateTime(2024, 11, 01, 11, 59, 59); // Set to Oct 1, 2024, 11:59 pM
 
   bool get isExpired => DateTime.now().isAfter(expirationDate);
 
   @override
   void initState() {
     super.initState();
+    _initializeNotifications();
+  }
+
+  Future<void> _initializeBasicNotifications() async {
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+
+    final InitializationSettings initializationSettings =
+        InitializationSettings(android: initializationSettingsAndroid);
+
+    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+  }
+
+  Future<void> _initializeNotifications() async {
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+
+    final InitializationSettings initializationSettings =
+        InitializationSettings(android: initializationSettingsAndroid);
+
+    await flutterLocalNotificationsPlugin.initialize(initializationSettings,
+        onDidReceiveNotificationResponse:
+            (NotificationResponse response) async {
+      final String? payload = response.payload;
+      if (payload != null) {
+        await OpenFile.open(payload); // Open the downloaded file
+      }
+    });
+  }
+
+  Future<void> _downloadTranscriptions() async {
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+      'download_channel',
+      'Downloads',
+      channelDescription: 'Notifications for download progress',
+      importance: Importance.max,
+      priority: Priority.high,
+      showWhen: false,
+      icon:
+          'mothersonlogo', // Replace with your actual icon name (without extension)
+    );
+
+    const NotificationDetails platformChannelSpecifics =
+        NotificationDetails(android: androidPlatformChannelSpecifics);
+
+    // Check for storage permissions
+    if (await Permission.storage.request().isGranted) {
+      // Show notification for download start
+      await flutterLocalNotificationsPlugin.show(
+        0,
+        'Downloading Transcription',
+        'Download in progress...',
+        platformChannelSpecifics,
+      );
+
+      try {
+        // Get the external storage directory
+        final directory = await getExternalStorageDirectory();
+        // Check if the directory is not null
+        if (directory != null) {
+          // Define the downloads directory
+          final downloadsDirectory = Directory('${directory.path}/Download');
+
+          // Ensure the downloads directory exists
+          if (!await downloadsDirectory.exists()) {
+            await downloadsDirectory.create(recursive: true);
+          }
+
+          // Specify the file path in the downloads directory
+          final filePath =
+              path.join(downloadsDirectory.path, 'transcription.txt');
+          final file = File(filePath);
+
+          // Combine all transcription texts into a formatted string
+          final String content = transcriptions.map((t) {
+            return 'Original: ${t.originalText}\nTranslated: ${t.translatedText}\n';
+          }).join('\n');
+
+          // Write the transcription to a file
+          await file.writeAsString(content);
+
+          // Show complete notification
+          await flutterLocalNotificationsPlugin.show(
+            0,
+            'Download Complete',
+            'Transcription saved at $filePath',
+            platformChannelSpecifics,
+            payload: filePath, // Pass the file path in the payload
+          );
+        } else {
+          // Handle case where directory is null
+          await flutterLocalNotificationsPlugin.show(
+            0,
+            'Download Failed',
+            'Could not get download directory.',
+            platformChannelSpecifics,
+          );
+        }
+      } catch (e) {
+        print("Error occurred: $e"); // Log the error for debugging
+        await flutterLocalNotificationsPlugin.show(
+          0,
+          'Download Failed',
+          'Failed to save transcription: $e',
+          platformChannelSpecifics,
+        );
+      }
+    } else {
+      // Handle permission denial
+      await flutterLocalNotificationsPlugin.show(
+        0,
+        'Permission Denied',
+        'Storage permission is required to save transcription.',
+        platformChannelSpecifics,
+      );
+    }
   }
 
   Future<void> _showEditDialog(Transcription transcription, bool isLeft) async {
@@ -263,12 +391,12 @@ class _TranslatorScreenState extends State<TranslatorScreen> {
             targetLanguage: getTargetLanguageEnum(),
           );
           break;
-        case 'German':
-          translator = OnDeviceTranslator(
-            sourceLanguage: TranslateLanguage.german,
-            targetLanguage: getTargetLanguageEnum(),
-          );
-          break;
+        // case 'German':
+        //   translator = OnDeviceTranslator(
+        //     sourceLanguage: TranslateLanguage.german,
+        //     targetLanguage: getTargetLanguageEnum(),
+        //   );
+        //   break;
         default:
           translator = OnDeviceTranslator(
             sourceLanguage: TranslateLanguage.english,
@@ -294,8 +422,8 @@ class _TranslatorScreenState extends State<TranslatorScreen> {
         return TranslateLanguage.french;
       case 'Hindi':
         return TranslateLanguage.hindi;
-      case 'German':
-        return TranslateLanguage.german;
+      // case 'German':
+      //   return TranslateLanguage.german;
       default:
         return TranslateLanguage.english;
     }
@@ -309,8 +437,8 @@ class _TranslatorScreenState extends State<TranslatorScreen> {
         return TranslateLanguage.french;
       case 'Hindi':
         return TranslateLanguage.hindi;
-      case 'German':
-        return TranslateLanguage.german;
+      // case 'German':
+      //   return TranslateLanguage.german;
       default:
         return TranslateLanguage.english;
     }
@@ -339,8 +467,6 @@ class _TranslatorScreenState extends State<TranslatorScreen> {
       modelPath = 'assets/models/vosk-model-small-fr-0.22.zip';
     } else if (language == 'Hindi') {
       modelPath = 'assets/models/vosk-model-small-hi-0.22.zip';
-    } else if (language == 'German') {
-      modelPath = 'assets/models/vosk-model-small-de-0.15.zip';
     } else {
       modelPath = 'assets/models/vosk-model-small-en-in-0.4.zip';
     }
@@ -376,9 +502,6 @@ class _TranslatorScreenState extends State<TranslatorScreen> {
 
     // If the app is not expired, show the main content
     return Scaffold(
-      // appBar: CustomAppBar(
-      //   onToggle: () {},
-      // ), // Use your custom AppBar
       body: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10.0),
         color: const Color(0xFFE4E3E0),
@@ -420,24 +543,19 @@ class _TranslatorScreenState extends State<TranslatorScreen> {
                     onTap: () async {
                       if (!isRecordingLeft) {
                         _toggleRecordingLeft();
-
                         setState(() {
                           isWaitingLeft = true;
                           isAnimatingDotsLeft = false;
                         });
-
                         await Future.delayed(
                             const Duration(milliseconds: 1000));
-
                         await Future.delayed(const Duration(milliseconds: 450));
-
                         setState(() {
                           isWaitingLeft = false;
                           isAnimatingDotsLeft = true;
                         });
                       } else {
                         _toggleRecordingLeft();
-
                         setState(() {
                           isWaitingLeft = false;
                           isAnimatingDotsLeft = false;
@@ -462,30 +580,60 @@ class _TranslatorScreenState extends State<TranslatorScreen> {
                     ),
                   ),
 
+                  // Conditionally show the download button if transcriptions is not empty
+                  if (transcriptions.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10.0),
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          setState(() {
+                            isAnimatingDownload = true; // Start the animation
+                          });
+
+                          // Wait for 1 second before starting the download
+                          await Future.delayed(const Duration(seconds: 2));
+
+                          setState(() {
+                            isAnimatingDownload = false; // Stop the animation
+                          });
+
+                          _downloadTranscriptions(); // Download function
+                        },
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.all(6.0),
+                          backgroundColor:
+                              Colors.redAccent, // Color for the button
+                          shape: const CircleBorder(), // Circular button shape
+                        ),
+                        child: isAnimatingDownload
+                            ? LoadingAnimationWidget.hexagonDots(
+                                color: Colors.white,
+                                size: 30) // Animation during download
+                            : const Icon(
+                                Icons.file_download,
+                                size: 30, // Same size as previous
+                                color: Colors.white, // White icon for contrast
+                              ),
+                      ),
+                    ),
+
                   // Right Mic
                   GestureDetector(
                     onTap: () async {
                       if (!isRecordingRight) {
                         _toggleRecordingRight();
-                        // Start the discrete circular animation
                         setState(() {
                           isWaitingRight = true;
                           isAnimatingDotsRight = false;
                         });
-
-                        // Wait for 1 second for the discrete animation
                         await Future.delayed(const Duration(seconds: 1));
-
-                        // Wait for an additional 2 seconds before starting
                         await Future.delayed(const Duration(milliseconds: 450));
-
                         setState(() {
                           isWaitingRight = false;
                           isAnimatingDotsRight = true;
                         });
                       } else {
                         _toggleRecordingRight();
-
                         setState(() {
                           isWaitingRight = false;
                           isAnimatingDotsRight = false;

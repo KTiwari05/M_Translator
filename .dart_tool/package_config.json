@@ -128,6 +128,24 @@
       "languageVersion": "3.1"
     },
     {
+      "name": "flutter_local_notifications",
+      "rootUri": "file:///C:/Users/Kartikey.Tiwari/AppData/Local/Pub/Cache/hosted/pub.dev/flutter_local_notifications-17.2.3",
+      "packageUri": "lib/",
+      "languageVersion": "2.17"
+    },
+    {
+      "name": "flutter_local_notifications_linux",
+      "rootUri": "file:///C:/Users/Kartikey.Tiwari/AppData/Local/Pub/Cache/hosted/pub.dev/flutter_local_notifications_linux-4.0.1",
+      "packageUri": "lib/",
+      "languageVersion": "2.17"
+    },
+    {
+      "name": "flutter_local_notifications_platform_interface",
+      "rootUri": "file:///C:/Users/Kartikey.Tiwari/AppData/Local/Pub/Cache/hosted/pub.dev/flutter_local_notifications_platform_interface-7.2.0",
+      "packageUri": "lib/",
+      "languageVersion": "2.17"
+    },
+    {
       "name": "flutter_test",
       "rootUri": "file:///C:/Users/Kartikey.Tiwari/Downloads/Flutter/flutter_windows_3.24.3-stable/flutter/packages/flutter_test",
       "packageUri": "lib/",
@@ -240,6 +258,54 @@
       "rootUri": "file:///C:/Users/Kartikey.Tiwari/AppData/Local/Pub/Cache/hosted/pub.dev/nm-0.5.0",
       "packageUri": "lib/",
       "languageVersion": "2.12"
+    },
+    {
+      "name": "open_file",
+      "rootUri": "file:///C:/Users/Kartikey.Tiwari/AppData/Local/Pub/Cache/hosted/pub.dev/open_file-3.5.9",
+      "packageUri": "lib/",
+      "languageVersion": "2.17"
+    },
+    {
+      "name": "open_file_android",
+      "rootUri": "file:///C:/Users/Kartikey.Tiwari/AppData/Local/Pub/Cache/hosted/pub.dev/open_file_android-1.0.6",
+      "packageUri": "lib/",
+      "languageVersion": "2.17"
+    },
+    {
+      "name": "open_file_ios",
+      "rootUri": "file:///C:/Users/Kartikey.Tiwari/AppData/Local/Pub/Cache/hosted/pub.dev/open_file_ios-1.0.3",
+      "packageUri": "lib/",
+      "languageVersion": "2.17"
+    },
+    {
+      "name": "open_file_linux",
+      "rootUri": "file:///C:/Users/Kartikey.Tiwari/AppData/Local/Pub/Cache/hosted/pub.dev/open_file_linux-0.0.5",
+      "packageUri": "lib/",
+      "languageVersion": "2.17"
+    },
+    {
+      "name": "open_file_mac",
+      "rootUri": "file:///C:/Users/Kartikey.Tiwari/AppData/Local/Pub/Cache/hosted/pub.dev/open_file_mac-1.0.2",
+      "packageUri": "lib/",
+      "languageVersion": "2.17"
+    },
+    {
+      "name": "open_file_platform_interface",
+      "rootUri": "file:///C:/Users/Kartikey.Tiwari/AppData/Local/Pub/Cache/hosted/pub.dev/open_file_platform_interface-1.0.3",
+      "packageUri": "lib/",
+      "languageVersion": "2.17"
+    },
+    {
+      "name": "open_file_web",
+      "rootUri": "file:///C:/Users/Kartikey.Tiwari/AppData/Local/Pub/Cache/hosted/pub.dev/open_file_web-0.0.4",
+      "packageUri": "lib/",
+      "languageVersion": "2.17"
+    },
+    {
+      "name": "open_file_windows",
+      "rootUri": "file:///C:/Users/Kartikey.Tiwari/AppData/Local/Pub/Cache/hosted/pub.dev/open_file_windows-0.0.3",
+      "packageUri": "lib/",
+      "languageVersion": "2.17"
     },
     {
       "name": "package_config",
@@ -381,9 +447,9 @@
     },
     {
       "name": "record_web",
-      "rootUri": "file:///C:/Users/Kartikey.Tiwari/AppData/Local/Pub/Cache/hosted/pub.dev/record_web-1.1.0",
+      "rootUri": "file:///C:/Users/Kartikey.Tiwari/AppData/Local/Pub/Cache/hosted/pub.dev/record_web-1.1.3",
       "packageUri": "lib/",
-      "languageVersion": "3.3"
+      "languageVersion": "3.4"
     },
     {
       "name": "record_windows",
@@ -452,6 +518,12 @@
       "languageVersion": "3.2"
     },
     {
+      "name": "timezone",
+      "rootUri": "file:///C:/Users/Kartikey.Tiwari/AppData/Local/Pub/Cache/hosted/pub.dev/timezone-0.9.4",
+      "packageUri": "lib/",
+      "languageVersion": "2.19"
+    },
+    {
       "name": "typed_data",
       "rootUri": "file:///C:/Users/Kartikey.Tiwari/AppData/Local/Pub/Cache/hosted/pub.dev/typed_data-1.3.2",
       "packageUri": "lib/",
@@ -483,9 +555,9 @@
     },
     {
       "name": "web",
-      "rootUri": "file:///C:/Users/Kartikey.Tiwari/AppData/Local/Pub/Cache/hosted/pub.dev/web-0.5.1",
+      "rootUri": "file:///C:/Users/Kartikey.Tiwari/AppData/Local/Pub/Cache/hosted/pub.dev/web-1.1.0",
       "packageUri": "lib/",
-      "languageVersion": "3.3"
+      "languageVersion": "3.4"
     },
     {
       "name": "xdg_directories",
@@ -512,7 +584,7 @@
       "languageVersion": "3.3"
     }
   ],
-  "generated": "2024-10-22T04:24:10.973634Z",
+  "generated": "2024-10-23T12:44:45.102124Z",
   "generator": "pub",
   "generatorVersion": "3.5.3",
   "flutterRoot": "file:///C:/Users/Kartikey.Tiwari/Downloads/Flutter/flutter_windows_3.24.3-stable/flutter",
